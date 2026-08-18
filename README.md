@@ -20,11 +20,16 @@ A composable probe engine records timed results, derives health and alert state,
 ## Architecture
 ```mermaid
 flowchart LR
-  Input[Validated input] --> Core[Domain engine]
-  Core --> Store[(Durable store)]
-  CLI[CLI] --> Core
-  API[REST API] --> Core
-  Core --> Evidence[Results and evidence]
+  Config[Check configuration] --> Scheduler[Probe scheduler]
+  Scheduler --> DNS[DNS resolver]
+  Scheduler --> TCP[TCP / ICMP probes]
+  Scheduler --> Web[HTTP / HTTPS probe]
+  Web --> TLS[TLS inspector]
+  DNS & TCP & TLS --> Health[Health evaluator]
+  Health --> History[(SQLite history)]
+  Health --> Alerts[Failure threshold alerts]
+  CLI[Typer CLI] --> Scheduler
+  API[FastAPI] --> Scheduler
 ```
 See [architecture](docs/architecture.md).
 
