@@ -2,35 +2,65 @@
 
 ## System context
 
-NetSentinel is organized around independent probes rather than one monolithic ping command. The scheduler invokes DNS, socket, web, ICMP, and certificate adapters. Every adapter returns the same timed result shape, allowing the health evaluator to derive `HEALTHY`, `DEGRADED`, or `DOWN` consistently. Results feed SQLite uptime history and the consecutive-failure alert tracker. The CLI and REST API call the same domain functions, so interfaces do not duplicate diagnostic policy.
+NetSentinel separates protocol observation from monitoring policy. Operators register validated check definitions through JSON configuration, CLI, or REST. The monitor dispatches each definition to an independent protocol probe, persists uniform evidence, advances that check's failure counter, and derives both per-check alert state and aggregate service state. Delivery adapters do not contain probe or alert logic.
 
 ## Component diagram
 
 ```mermaid
 flowchart LR
-  Config[Check configuration] --> Scheduler[Probe scheduler]
+  Config[JSON configuration] --> Inventory[(Check inventory)]
+  CLI[Typer CLI] --> Inventory
+  API[FastAPI REST API] --> Inventory
+  Inventory --> Scheduler[Monitor scheduler]
   Scheduler --> DNS[DNS resolver]
-  Scheduler --> TCP[TCP / ICMP probes]
-  Scheduler --> Web[HTTP / HTTPS probe]
-  Web --> TLS[TLS inspector]
-  DNS & TCP & TLS --> Health[Health evaluator]
-  Health --> History[(SQLite history)]
-  Health --> Alerts[Failure threshold alerts]
-  CLI[Typer CLI] --> Scheduler
-  API[FastAPI] --> Scheduler
+  Scheduler --> TCP[TCP probe]
+  Scheduler --> HTTP[HTTP status probe]
+  Scheduler --> TLS[TLS trust and expiry probe]
+  Scheduler --> ICMP[Optional ICMP probe]
+  DNS & TCP & HTTP & TLS & ICMP --> Result[Uniform timed result]
+  Result --> History[(SQLite evidence history)]
+  Result --> Counter[Consecutive-failure counter]
+  Counter --> Alert[OK / WARNING / ALERT]
+  History --> Uptime[Observed uptime percentage]
+  Alert & Uptime --> API
 ```
 
-## Data and control flow
+## Runtime sequence
 
-The solid arrows show runtime data or control flow. Dotted arrows, where present, describe policy rather than runtime connectivity. Domain decisions remain independent of CLI and HTTP delivery so they can be tested without binding sockets or paid services. Inputs are validated before persistence or outbound I/O, and evidence is retained at the point where the system makes an operational decision.
+```mermaid
+sequenceDiagram
+  participant O as Operator / scheduler
+  participant M as Monitor
+  participant P as Protocol probe
+  participant R as SQLite repository
+  O->>M: run check ID
+  M->>R: load validated definition
+  M->>P: execute with bounded timeout
+  P-->>M: timed result and protocol evidence
+  M->>R: transactionally store result and update failure count
+  R-->>M: current alert state
+  M-->>O: result, latency, evidence, alert state
+```
+
+## Persistence model
+
+- `checks` stores unique names, protocol kind, target, port, expected HTTP status, timeout, threshold, enablement, and consecutive failures.
+- `results` stores immutable timestamps, health decisions, latency, and structured protocol evidence linked by a foreign key.
+- The `(check_id, checked_at)` index supports bounded recent-history and uptime queries.
+- A successful observation resets only its own check's failure counter; failures increment it in the same transaction as the result insert.
+
+## State model
+
+A check starts at `OK`. Failures below its threshold produce `WARNING`; reaching the threshold produces `ALERT`; a subsequent success returns it to `OK`. Aggregate state is `HEALTHY` when every enabled check is `OK`, `DOWN` when every enabled check is in `ALERT`, and `DEGRADED` otherwise. With no configured checks, state is `DEGRADED` rather than a misleading success.
 
 ## Trust boundaries
 
-1. **External input boundary:** network targets, telemetry, identity requests, documents, logs, or field records are untrusted.
-2. **Domain boundary:** validated values enter deterministic policy and state-transition logic.
-3. **Persistence boundary:** parameterized or structured writes protect stored operational evidence.
-4. **Operator boundary:** alerts, conflict choices, infrastructure deployment, and other consequential actions remain explicit operator responsibilities.
+1. **Administrative input:** targets cause outbound network activity and must be defined only by trusted operators.
+2. **Outbound network:** DNS answers, endpoints, redirects, certificates, and latency are untrusted observations.
+3. **Domain boundary:** all probes return the same bounded evidence object before policy evaluation.
+4. **Persistence boundary:** parameterized writes keep configuration separate from SQL and retain decision evidence.
+5. **Presentation boundary:** CLI and API serialize domain results without exposing tracebacks or response bodies.
 
 ## Failure behavior
 
-Adapters return explicit errors or states rather than manufacturing successful results. Timeouts and unavailable dependencies affect only the relevant operation. The limitations documented in the README define what cannot be inferred from the available evidence.
+DNS, socket, HTTP, TLS, and ICMP failures become unhealthy results with bounded error type and message. A failure in one check does not stop remaining checks. Disabled checks are not scheduled. Network timeouts are configurable from 0.1 to 30 seconds, continuous scheduling is supervised externally, and the stored history remains available after process restart.

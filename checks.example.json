@@ -1,0 +1,26 @@
+{
+  "checks": [
+    {
+      "name": "public-dns",
+      "kind": "dns",
+      "target": "example.com",
+      "timeout_seconds": 3,
+      "failure_threshold": 3
+    },
+    {
+      "name": "website",
+      "kind": "http",
+      "target": "https://example.com",
+      "expected_status": 200,
+      "timeout_seconds": 5,
+      "failure_threshold": 2
+    },
+    {
+      "name": "website-certificate",
+      "kind": "tls",
+      "target": "example.com",
+      "port": 443,
+      "failure_threshold": 2
+    }
+  ]
+}
