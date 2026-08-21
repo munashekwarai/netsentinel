@@ -82,6 +82,27 @@ class Repository:
             "latest_run_at": max((row["checked_at"] for row in latest), default=None),
         }
 
+    def recent_activity(self, limit: int = 50, failures_only: bool = False) -> list[dict]:
+        """Return a cross-monitor evidence stream for dashboards and incident review."""
+        limit = max(1, min(limit, 200))
+        where = "WHERE r.healthy=0" if failures_only else ""
+        rows = self.db.execute(
+            f"""SELECT r.id,r.check_id,c.name,c.kind,c.target,r.healthy,r.latency_ms,
+                       r.detail_json,r.checked_at
+                FROM results r JOIN checks c ON c.id=r.check_id {where}
+                ORDER BY r.checked_at DESC,r.id DESC LIMIT ?""",
+            (limit,),
+        )
+        return [
+            {
+                "id": row["id"], "check_id": row["check_id"], "name": row["name"],
+                "kind": row["kind"], "target": row["target"], "healthy": bool(row["healthy"]),
+                "latency_ms": row["latency_ms"], "detail": json.loads(row["detail_json"]),
+                "checked_at": row["checked_at"],
+            }
+            for row in rows
+        ]
+
     def record(self, result: CheckResult) -> AlertState:
         if result.check_id is None:
             raise ValueError("persisted results require a check_id")

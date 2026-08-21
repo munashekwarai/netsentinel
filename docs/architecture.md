@@ -8,6 +8,11 @@ latest observations, and per-check history supplies diagnostic evidence. Monitor
 execution, and deletion remain API operations rather than browser-only state. This keeps the CLI,
 console, and third-party integrations on the same domain and persistence boundary.
 
+The cross-monitor `/activity` stream drives the response chart and incident feed. It joins stored
+results to their check definitions and can be restricted to failed observations. Protocol coverage
+is computed from the current inventory, while the per-service history strip comes directly from the
+bounded history endpoint. None of these visualizations maintains a separate analytics datastore.
+
 The console deliberately renders `No data`, `Never`, and empty-inventory states until probes have
 actually produced evidence. Theme preference is the only browser-local setting; operational state
 always comes from SQLite.

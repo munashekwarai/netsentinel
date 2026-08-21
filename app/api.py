@@ -69,6 +69,11 @@ def overview() -> dict:
     return {**repository.overview(), "monitor_state": monitor.overall_state().value}
 
 
+@app.get("/activity")
+def activity(limit: int = Query(default=50, ge=1, le=200), failures_only: bool = False) -> dict:
+    return {"events": repository.recent_activity(limit, failures_only)}
+
+
 @app.patch("/checks/{check_id}")
 def update_check_state(check_id: int, value: CheckStateInput) -> dict:
     try:

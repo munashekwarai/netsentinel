@@ -58,6 +58,9 @@ def test_overview_state_controls_and_delete(monkeypatch):
     assert http.post(f"/checks/{check_id}/run").status_code == 200
     measured = http.get("/overview").json()
     assert measured["healthy_checks"] == 1 and measured["average_latency_ms"] == 8.2
+    activity = http.get("/activity").json()["events"]
+    assert activity[0]["name"] == "resolver" and activity[0]["healthy"] is True
+    assert http.get("/activity?failures_only=true").json()["events"] == []
     listed = http.get("/checks").json()[0]
     assert listed["latest_result"]["latency_ms"] == 8.2
 
@@ -71,5 +74,6 @@ def test_operator_console_and_assets_are_served(monkeypatch):
     page = http.get("/")
     assert page.status_code == 200
     assert "Service health" in page.text and "No monitors configured" in page.text
+    assert "Response performance" in page.text and "Recent incidents" in page.text
     assert http.get("/assets/app.css").status_code == 200
     assert http.get("/assets/app.js").status_code == 200
