@@ -64,6 +64,11 @@ def test_overview_state_controls_and_delete(monkeypatch):
     listed = http.get("/checks").json()[0]
     assert listed["latest_result"]["latency_ms"] == 8.2
 
+    replaced = http.put(f"/checks/{check_id}", json={"name": "primary resolver", "kind": "dns",
+                                                             "target": "resolver.internal", "failure_threshold": 4})
+    assert replaced.status_code == 200 and replaced.json()["name"] == "primary resolver"
+    assert http.get(f"/checks/{check_id}/history").json()["results"][0]["latency_ms"] == 8.2
+
     assert http.patch(f"/checks/{check_id}", json={"enabled": False}).json()["enabled"] is False
     assert http.delete(f"/checks/{check_id}").status_code == 204
     assert http.get("/checks").json() == []

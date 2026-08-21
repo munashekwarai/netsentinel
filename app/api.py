@@ -58,6 +58,9 @@ def list_checks() -> list[dict]:
         recent = repository.history(item.id, 1) if item.id else []
         checks.append({"id": item.id, "name": item.name, "kind": item.kind.value, "target": item.target,
                        "port": item.port, "enabled": item.enabled,
+                       "timeout_seconds": item.timeout_seconds,
+                       "expected_status": item.expected_status,
+                       "failure_threshold": item.failure_threshold,
                        "alert_state": repository.alert_state(item.id).value if item.id else "OK",
                        "uptime_percent": repository.uptime(item.id) if item.id else None,
                        "latest_result": recent[0] if recent else None})
@@ -81,6 +84,19 @@ def update_check_state(check_id: int, value: CheckStateInput) -> dict:
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from None
     return {"id": spec.id, "enabled": spec.enabled}
+
+
+@app.put("/checks/{check_id}")
+def replace_check(check_id: int, value: CheckInput) -> dict:
+    try:
+        spec = repository.update_check(check_id, CheckSpec(**value.model_dump()))
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "a check with that name already exists") from None
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {"id": spec.id, **value.model_dump(mode="json"), "enabled": spec.enabled}
 
 
 @app.delete("/checks/{check_id}", status_code=204)

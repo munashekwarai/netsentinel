@@ -8,6 +8,10 @@ latest observations, and per-check history supplies diagnostic evidence. Monitor
 execution, and deletion remain API operations rather than browser-only state. This keeps the CLI,
 console, and third-party integrations on the same domain and persistence boundary.
 
+Definition replacement updates the validated probe configuration in place, retaining the monitor ID
+and its existing result history. The evidence inspector is a focused drawer rather than another
+dashboard page, so operators can investigate a monitor and return to the same inventory context.
+
 The cross-monitor `/activity` stream drives the response chart and incident feed. It joins stored
 results to their check definitions and can be restricted to failed observations. Protocol coverage
 is computed from the current inventory, while the per-service history strip comes directly from the

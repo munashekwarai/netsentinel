@@ -57,6 +57,19 @@ class Repository:
             raise KeyError(f"check {check_id} not found")
         return self.get_check(check_id)
 
+    def update_check(self, check_id: int, spec: CheckSpec) -> CheckSpec:
+        """Replace an existing definition without discarding its observation history."""
+        with self.db:
+            cursor = self.db.execute(
+                """UPDATE checks SET name=?,kind=?,target=?,port=?,timeout_seconds=?,
+                   expected_status=?,failure_threshold=? WHERE id=?""",
+                (spec.name, spec.kind.value, spec.target, spec.port, spec.timeout_seconds,
+                 spec.expected_status, spec.failure_threshold, check_id),
+            )
+        if cursor.rowcount == 0:
+            raise KeyError(f"check {check_id} not found")
+        return self.get_check(check_id)
+
     def delete_check(self, check_id: int) -> None:
         with self.db:
             cursor = self.db.execute("DELETE FROM checks WHERE id=?", (check_id,))

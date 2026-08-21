@@ -59,6 +59,7 @@ See [the detailed architecture](docs/architecture.md), [security design](docs/se
 - One-shot diagnostics, configuration-driven runs, continuous watch mode, and history CLI commands.
 - Responsive operator console with light/dark themes, health KPIs, inventory filtering, monitor lifecycle controls, and protocol evidence.
 - Evidence-backed response trend, protocol coverage, cross-monitor activity stream, failed-observation incident feed, and per-service health history.
+- In-place monitor editing that preserves observation history, plus a focused evidence drawer for protocol detail and recent outcomes.
 - REST endpoints for registration, listing, execution, bulk runs, health, uptime, and history.
 - Structured JSON operational logs.
 - Non-root, read-only container deployment with a persistent data volume.
