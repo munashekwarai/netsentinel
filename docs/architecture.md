@@ -1,5 +1,17 @@
 # NetSentinel Architecture
 
+## Operator console
+
+The responsive console is served by the same FastAPI process as the REST API. It reads only the
+documented JSON endpoints: `/overview` supplies real aggregates, `/checks` supplies inventory and
+latest observations, and per-check history supplies diagnostic evidence. Monitor creation, pause,
+execution, and deletion remain API operations rather than browser-only state. This keeps the CLI,
+console, and third-party integrations on the same domain and persistence boundary.
+
+The console deliberately renders `No data`, `Never`, and empty-inventory states until probes have
+actually produced evidence. Theme preference is the only browser-local setting; operational state
+always comes from SQLite.
+
 ## System context
 
 NetSentinel separates protocol observation from monitoring policy. Operators register validated check definitions through JSON configuration, CLI, or REST. The monitor dispatches each definition to an independent protocol probe, persists uniform evidence, advances that check's failure counter, and derives both per-check alert state and aggregate service state. Delivery adapters do not contain probe or alert logic.

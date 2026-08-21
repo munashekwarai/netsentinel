@@ -47,3 +47,29 @@ def test_api_rejects_invalid_tcp_definition(monkeypatch):
     response = http.post("/checks", json={"name": "database", "kind": "tcp",
                                                 "target": "db.internal"})
     assert response.status_code == 422
+
+
+def test_overview_state_controls_and_delete(monkeypatch):
+    http = client(monkeypatch)
+    check_id = http.post("/checks", json={"name": "resolver", "kind": "dns", "target": "example.com"}).json()["id"]
+    empty = http.get("/overview").json()
+    assert empty["total_checks"] == 1 and empty["average_latency_ms"] is None
+
+    assert http.post(f"/checks/{check_id}/run").status_code == 200
+    measured = http.get("/overview").json()
+    assert measured["healthy_checks"] == 1 and measured["average_latency_ms"] == 8.2
+    listed = http.get("/checks").json()[0]
+    assert listed["latest_result"]["latency_ms"] == 8.2
+
+    assert http.patch(f"/checks/{check_id}", json={"enabled": False}).json()["enabled"] is False
+    assert http.delete(f"/checks/{check_id}").status_code == 204
+    assert http.get("/checks").json() == []
+
+
+def test_operator_console_and_assets_are_served(monkeypatch):
+    http = client(monkeypatch)
+    page = http.get("/")
+    assert page.status_code == 200
+    assert "Service health" in page.text and "No monitors configured" in page.text
+    assert http.get("/assets/app.css").status_code == 200
+    assert http.get("/assets/app.js").status_code == 200

@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .logging import configure
@@ -22,10 +25,14 @@ class CheckInput(BaseModel):
     failure_threshold: int = Field(default=3, ge=1, le=100)
 
 
+class CheckStateInput(BaseModel):
+    enabled: bool
+
+
 repository = Repository(os.getenv("NETSENTINEL_DB", ":memory:"))
 monitor = Monitor(repository)
 configure(os.getenv("LOG_LEVEL", "INFO"))
-app = FastAPI(title="NetSentinel", version="0.2.0")
+app = FastAPI(title="NetSentinel", version="0.3.0")
 
 
 @app.get("/health")
@@ -46,8 +53,37 @@ def create_check(value: CheckInput) -> dict:
 
 @app.get("/checks")
 def list_checks() -> list[dict]:
-    return [{"id": item.id, "name": item.name, "kind": item.kind.value, "target": item.target,
-             "port": item.port, "enabled": item.enabled} for item in repository.list_checks()]
+    checks = []
+    for item in repository.list_checks():
+        recent = repository.history(item.id, 1) if item.id else []
+        checks.append({"id": item.id, "name": item.name, "kind": item.kind.value, "target": item.target,
+                       "port": item.port, "enabled": item.enabled,
+                       "alert_state": repository.alert_state(item.id).value if item.id else "OK",
+                       "uptime_percent": repository.uptime(item.id) if item.id else None,
+                       "latest_result": recent[0] if recent else None})
+    return checks
+
+
+@app.get("/overview")
+def overview() -> dict:
+    return {**repository.overview(), "monitor_state": monitor.overall_state().value}
+
+
+@app.patch("/checks/{check_id}")
+def update_check_state(check_id: int, value: CheckStateInput) -> dict:
+    try:
+        spec = repository.set_enabled(check_id, value.enabled)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from None
+    return {"id": spec.id, "enabled": spec.enabled}
+
+
+@app.delete("/checks/{check_id}", status_code=204)
+def delete_check(check_id: int) -> None:
+    try:
+        repository.delete_check(check_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from None
 
 
 @app.post("/checks/{check_id}/run")
@@ -74,3 +110,12 @@ def run_all() -> dict:
     outcomes = monitor.run_all()
     return {"monitor_state": monitor.overall_state().value,
             "checks": [outcome.to_dict() for outcome in outcomes]}
+
+
+WEB_ROOT = Path(__file__).with_name("web")
+app.mount("/assets", StaticFiles(directory=WEB_ROOT / "assets"), name="assets")
+
+
+@app.get("/", include_in_schema=False)
+def console() -> FileResponse:
+    return FileResponse(WEB_ROOT / "index.html")

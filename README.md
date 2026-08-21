@@ -57,6 +57,7 @@ See [the detailed architecture](docs/architecture.md), [security design](docs/se
 - Per-check failure thresholds with `OK`, `WARNING`, and `ALERT` states.
 - Overall `HEALTHY`, `DEGRADED`, and `DOWN` monitoring state.
 - One-shot diagnostics, configuration-driven runs, continuous watch mode, and history CLI commands.
+- Responsive operator console with light/dark themes, health KPIs, inventory filtering, monitor lifecycle controls, and protocol evidence.
 - REST endpoints for registration, listing, execution, bulk runs, health, uptime, and history.
 - Structured JSON operational logs.
 - Non-root, read-only container deployment with a persistent data volume.
@@ -93,6 +94,15 @@ netsentinel run checks.json --database ./data/netsentinel.db
 netsentinel watch checks.json --database ./data/netsentinel.db --interval 60
 netsentinel history 1 --database ./data/netsentinel.db
 ```
+
+Operator console:
+
+```bash
+NETSENTINEL_DB=./data/netsentinel.db uvicorn app.api:app --host 127.0.0.1 --port 8000
+# Open http://127.0.0.1:8000
+```
+
+The console never invents health data: KPIs, status, uptime, latency, and diagnostics are derived from persisted probe results. Empty inventories and checks without observations have explicit empty states.
 
 REST API:
 

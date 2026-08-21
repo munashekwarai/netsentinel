@@ -50,6 +50,38 @@ class Repository:
         sql = "SELECT * FROM checks" + (" WHERE enabled=1" if enabled_only else "") + " ORDER BY id"
         return [self._spec(row) for row in self.db.execute(sql)]
 
+    def set_enabled(self, check_id: int, enabled: bool) -> CheckSpec:
+        with self.db:
+            cursor = self.db.execute("UPDATE checks SET enabled=? WHERE id=?", (int(enabled), check_id))
+        if cursor.rowcount == 0:
+            raise KeyError(f"check {check_id} not found")
+        return self.get_check(check_id)
+
+    def delete_check(self, check_id: int) -> None:
+        with self.db:
+            cursor = self.db.execute("DELETE FROM checks WHERE id=?", (check_id,))
+        if cursor.rowcount == 0:
+            raise KeyError(f"check {check_id} not found")
+
+    def overview(self) -> dict:
+        """Return real inventory and latest-result aggregates for the operator console."""
+        checks = self.list_checks()
+        states = [self.alert_state(check.id) for check in checks if check.id and check.enabled]
+        latest = self.db.execute(
+            """SELECT r.check_id,r.healthy,r.latency_ms,r.checked_at
+               FROM results r JOIN (SELECT check_id,MAX(id) id FROM results GROUP BY check_id) x ON r.id=x.id"""
+        ).fetchall()
+        measured = [row for row in latest if row["latency_ms"] is not None]
+        return {
+            "total_checks": len(checks),
+            "enabled_checks": sum(check.enabled for check in checks),
+            "healthy_checks": sum(state is AlertState.OK for state in states),
+            "warning_checks": sum(state is AlertState.WARNING for state in states),
+            "alerting_checks": sum(state is AlertState.ALERT for state in states),
+            "average_latency_ms": round(sum(row["latency_ms"] for row in measured) / len(measured), 1) if measured else None,
+            "latest_run_at": max((row["checked_at"] for row in latest), default=None),
+        }
+
     def record(self, result: CheckResult) -> AlertState:
         if result.check_id is None:
             raise ValueError("persisted results require a check_id")
